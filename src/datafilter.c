@@ -6,7 +6,7 @@
  * (at record or sample level) to selected time ranges.
  *
  * In general critical error messages are prefixed with "ERROR:" and
- * the return code will be 1.  On successfull operation the return
+ * the return code will be 1.  On successful operation the return
  * code will be 0.
  *
  * Written by Chad Trabant, IRIS Data Management Center.
@@ -38,19 +38,9 @@
 /* Input/output file selection information containers */
 typedef struct Filelink_s
 {
-  char *infilename; /* Input file name */
-  FILE *infp; /* Input file descriptor */
-  char *outfilename; /* Output file name */
-  FILE *outfp; /* Output file descriptor */
+  char *filename; /* Input file name */
   uint64_t startoffset; /* Byte offset to start reading, 0 = unused */
   uint64_t endoffset; /* Byte offset to end reading, 0 = unused */
-  int reordercount; /* Number of records re-ordered */
-  int recsplitcount; /* Number of records split */
-  int recrmcount; /* Number of records removed */
-  int rectrimcount; /* Number of records trimmed */
-  hptime_t earliest; /* Earliest data time in this file selection */
-  hptime_t latest; /* Latest data time in this file selection */
-  int byteswritten; /* Number of bytes written out */
   struct Filelink_s *next;
 } Filelink;
 
@@ -92,8 +82,6 @@ static char *outputfile = 0; /* Single output file */
 static flag outputmode = 0; /* Mode for single output file: 0=overwrite, 1=append */
 static Archive *archiveroot = 0; /* Output file structures */
 
-static char recordbuf[16384]; /* Global record buffer */
-
 static Filelink *filelist = 0; /* List of input files */
 static Filelink *filelisttail = 0; /* Tail of list of input files */
 static Selections *selections = 0; /* List of data selections */
@@ -112,13 +100,10 @@ main (int argc, char **argv)
 {
   Filelink *flp;
   Archive *arch;
-
-  char *leapsecondfile = NULL;
-
-  char *recordptr = NULL;
   char *wb = "wb";
   char *ab = "ab";
   char *mode;
+  char *leapsecondfile = NULL;
 
   /* Set default error message prefix */
   ms_loginit (NULL, NULL, NULL, "ERROR: ");
@@ -230,16 +215,16 @@ readfile (Filelink *flp)
   Selections *matchsp = 0;
   SelectTime *matchstp = 0;
 
-  hptime_t recstarttime;
-  hptime_t recendtime;
-  hptime_t selectstart;
-  hptime_t selectend;
-  hptime_t newstart;
-  hptime_t newend;
-  hptime_t selecttime;
+  hptime_t recstarttime = HPTERROR;
+  hptime_t recendtime = HPTERROR;
+  hptime_t selectstart = HPTERROR;
+  hptime_t selectend = HPTERROR;
+  hptime_t newstart = HPTERROR;
+  hptime_t newend = HPTERROR;
+  hptime_t selecttime = HPTERROR;
 
-  char srcname[100];
-  char timestr[32];
+  char srcname[100] = {0};
+  char timestr[32] = {0};
   int retcode;
   int rv;
 
@@ -250,16 +235,16 @@ readfile (Filelink *flp)
   {
     if (flp->startoffset || flp->endoffset)
       ms_log (1, "Reading: %s [range %" PRIu64 ":%" PRIu64 "]\n",
-              flp->infilename, flp->startoffset, flp->endoffset);
+              flp->filename, flp->startoffset, flp->endoffset);
     else
-      ms_log (1, "Reading: %s\n", flp->infilename);
+      ms_log (1, "Reading: %s\n", flp->filename);
   }
 
   /* Instruct libmseed to start at specified offset by setting a negative file position */
   fpos = -flp->startoffset; /* Unset value is a 0, making this a non-operation */
 
   /* Loop over the input file */
-  while ((retcode = ms_readmsr_main (&msfp, &msr, flp->infilename, reclen, &fpos, NULL, 1, 0, selections, verbose - 2)) == MS_NOERROR)
+  while ((retcode = ms_readmsr_main (&msfp, &msr, flp->filename, reclen, &fpos, NULL, 1, 0, selections, verbose - 2)) == MS_NOERROR)
   {
     /* Break out as EOF if we have read past end offset */
     if (flp->endoffset > 0 && fpos >= flp->endoffset)
@@ -398,7 +383,7 @@ readfile (Filelink *flp)
       if (rv == -2)
       {
         ms_log (2, "Cannot unpack miniSEED from byte offset %" PRId64 " in %s\n",
-                (int64_t)fpos, flp->infilename);
+                (int64_t)fpos, flp->filename);
         break;
       }
     }
@@ -418,7 +403,7 @@ readfile (Filelink *flp)
   /* Critical error if file was not read properly */
   if (retcode != MS_ENDOFFILE)
   {
-    ms_log (2, "Cannot read %s: %s\n", flp->infilename, ms_errorstr (retcode));
+    ms_log (2, "Cannot read %s: %s\n", flp->filename, ms_errorstr (retcode));
     ms_readmsr_main (&msfp, &msr, NULL, 0, NULL, NULL, 0, 0, NULL, 0);
     return -1;
   }
@@ -448,9 +433,9 @@ trimrecord (MSRecord *msr, hptime_t recendtime,
   MSRecord *datamsr = NULL;
   hptime_t hpdelta;
 
-  char srcname[100];
-  char stime[32];
-  char etime[32];
+  char srcname[100] = {0};
+  char stime[32] = {0};
+  char etime[32] = {0};
 
   int trimsamples;
   int samplesize;
@@ -471,9 +456,9 @@ trimrecord (MSRecord *msr, hptime_t recendtime,
       (newend != HPTERROR && (newend > recendtime || newend < msr->starttime)))
   {
     ms_log (2, "Problem with new start/end record bound times.\n");
-    ms_recsrcname (recordbuf, srcname, 1);
+    msr_srcname (msr, srcname, 1);
     ms_log (2, "  Original record %s from %s (byte offset: %" PRId64 ")\n",
-            srcname, flp->infilename, fpos);
+            srcname, flp->filename, fpos);
     ms_hptime2seedtimestr (msr->starttime, stime, 1);
     ms_hptime2seedtimestr (recendtime, etime, 1);
     ms_log (2, "       Start: %s       End: %s\n", stime, etime);
@@ -1256,7 +1241,7 @@ addfile (char *filename)
     newlp->startoffset = strtoull (at, NULL, 10);
   }
 
-  if (!(newlp->infilename = strdup (filename)))
+  if (!(newlp->filename = strdup (filename)))
   {
     ms_log (2, "addfile(): Cannot duplicate string\n");
     return -1;
