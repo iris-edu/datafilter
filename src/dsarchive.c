@@ -358,7 +358,7 @@ ds_streamproc (DataStream *datastream, MSRecord *msr, long suffix, int verbose)
 
   if (foundgroup != NULL)
   {
-    /* Write binary data samples to approriate file */
+    /* Write binary data samples to appropriate file */
     if (msr->datasamples && msr->numsamples)
     {
       if (dsverbose >= 3)

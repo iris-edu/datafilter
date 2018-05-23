@@ -32,7 +32,7 @@
 
 #include "dsarchive.h"
 
-#define VERSION "0.1"
+#define VERSION "0.2"
 #define PACKAGE "datafilter"
 
 /* Input/output file selection information containers */
@@ -640,9 +640,18 @@ writerecord (char *record, int reclen, void *handlerdata)
 {
   MSRecord *msr = handlerdata;
   Archive *arch;
+  MSTraceSeg *seg;
+  int64_t numsamples;
+  void *datasamples;
 
   if (!record || reclen <= 0 || !handlerdata)
     return;
+
+  /* Temporarily remove data samples from MSRecord, restored before returning */
+  datasamples = msr->datasamples;
+  numsamples = msr->numsamples;
+  msr->datasamples = NULL;
+  msr->numsamples = 0;
 
   /* Write to a single output file */
   if (ofp)
@@ -666,8 +675,6 @@ writerecord (char *record, int reclen, void *handlerdata)
 
   if (writtenfile)
   {
-    MSTraceSeg *seg;
-
     if ((seg = mstl_addmsr (writtentl, msr, 1, 1, -1.0, -1.0)) == NULL)
     {
       ms_log (2, "Error adding MSRecord to MSTraceList, bah humbug.\n");
@@ -689,6 +696,10 @@ writerecord (char *record, int reclen, void *handlerdata)
       *((int64_t *)seg->prvtptr) += msr->reclen;
     }
   }
+
+  /* Restore data samples and count */
+  msr->datasamples = datasamples;
+  msr->numsamples = numsamples;
 
   totalrecsout++;
   totalbytesout += reclen;
