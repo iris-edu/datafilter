@@ -1,0 +1,301 @@
+.TH DATAFILTER 1 2018/5/22
+.SH NAME
+datafilter - miniSEED data filtering
+
+.SH SYNOPSIS
+.nf
+datafilter [options] file1 [file2 file3 ...]
+.fi
+
+.SH DESCRIPTION
+\fBdatafilter\fP filters miniSEED data.  Various data selection
+criteria are available including by identifier, time or lists of
+arbitrary identifiers and times.
+
+By default, records that match all criteria and at least partially
+match a selected time range are written to the output.  Output data
+optionally may be pruned, i.e. trimmed, as the sample level.
+
+Input files will be read and processed in the order specified.
+
+Files on the command line prefixed with a '@' character are input list
+files and are expected to contain a simple list of input files, see
+\fBINPUT LIST FILE\fP for more details.
+
+Each input file may be specified with an explict byte range to read.
+The program will begin reading at the specified start offset and stop
+reading at the specified end range.  See \fBINPUT FILE RANGE\fP for
+more details.
+
+.SH OPTIONS
+
+.IP "-V         "
+Print program version and exit.
+
+.IP "-h         "
+Print program usage and exit.
+
+.IP "-H         "
+Print verbose program usage including details of archive format
+specification and exit.
+
+.IP "-v         "
+Be more verbose.  This flag can be used multiple times ("-v -v" or
+"-vv") for more verbosity.
+
+.IP "-s \fIselectfile\fP"
+Limit processing to miniSEED records that match a selection in the
+specified file.  The selection file contains parameters to match the
+network, station, location, channel, quality and time range for input
+records.  As a special case, specifying "-" will result in selection
+lines being read from stdin.  For more details see the \fBSELECTION
+FILE\fP section below.
+
+.IP "-ts \fItime\fP"
+Limit processing to miniSEED records that start after or contain
+\fItime\fP.  The format of the \fItime\fP argument
+is: 'YYYY[,DDD,HH,MM,SS.FFFFFF]' where valid delimiters are either
+commas (,), colons (:) or periods (.), except the seconds and
+fractional seconds must be separated by a period (.).
+
+.IP "-te \fItime\fP"
+Limit processing to miniSEED records that end before or contain
+\fItime\fP.  The format of the \fItime\fP argument
+is: 'YYYY[,DDD,HH,MM,SS.FFFFFF]' where valid delimiters are either
+commas (,), colons (:) or periods (.), except the seconds and
+fractional seconds must be separated by a period (.).
+
+.IP "-M \fImatch\fP"
+Limit input to records that match this regular expression, the
+\fImatch\fP is tested against the full source
+name: 'NET_STA_LOC_CHAN_QUAL'.  If the match expression begins with
+an '@' character it is assumed to indicate a file containing a list of
+expressions to match, see the \fBMATCH OR REJECT LIST FILE\fP section
+below.
+
+.IP "-R \fIreject\fP"
+Limit input to records that do not match this regular expression, the
+\fIreject\fP is tested against the full source
+name: 'NET_STA_LOC_CHAN_QUAL'.  If the reject expression begins with
+an '@' character it is assumed to indicate a file containing a list of
+expressions to reject, see the \fBMATCH OR REJECT LIST FILE\fP
+section below.
+
+.IP "-m \fImatch\fP"
+This is effectively the same as \fB-M\fP except that \fImatch\fP is
+evaluated as a globbing expression instead of regular expression.
+Otherwise undocumented as it is primarily useful at the IRIS DMC.
+
+.IP "-o \fIfile\fP"
+Write all output data to output \fIfile\fP.  If '-' is specified as
+the output file all output data will be written to standard out.  By
+default the output file will be overwritten, changing the option to
+\fI+o file\fP appends to the output file.
+
+.IP "-A \fIformat\fP"
+All output records will be written to a directory/file layout defined
+by \fIformat\fP.  All directories implied in the \fIformat\fP string
+will be created if necessary.  The option may be used multiple times
+to write input records to multiple archives.  See the \fBARCHIVE
+FORMAT\fP section below for more details including pre-defined archive
+layouts.
+
+.IP "-CHAN \fIdirectory\fP"
+.IP "-QCHAN \fIdirectory\fP"
+.IP "-CDAY \fIdirectory\fP"
+.IP "-SDAY \fIdirectory\fP"
+.IP "-BUD \fIdirectory\fP"
+.IP "-SDS \fIdirectory\fP"
+.IP "-CSS \fIdirectory\fP"
+Pre-defined output archive formats, see the \fBArchive Format\fP
+section below for more details.
+
+.IP "-Ps         "
+Prune, i.e. trim, records at the sample level according to the time
+range criteria.  Record trimming requires a supported data encoding,
+if unsupported (primarily older encodings) the record will be in the
+output untrimmed.
+
+.IP "-out file    "
+Print a summary of output records to the specified file.  Any existing
+file will be appended to.  Specify the file as '-' to print to stdout
+or '--' to print to stderr.  Each line contains network, station,
+location, channel, quality, start time, end time, byte count and
+sample count for each output trace segment.
+
+.IP "-outprefix prefix"
+Include the specified prefix string at the beginning of each line of
+summary output when using the \fI-out\fP option.  This is useful to
+identify the summary output in a stream that is potentially mixed with
+other output.
+
+.SH "SELECTION FILE"
+A selection file is used to match input data records based on network,
+station, location and channel information.  Optionally a quality and
+time range may also be specified for more refined selection.  The
+non-time fields may use the '*' wildcard to match multiple characters
+and the '?' wildcard to match single characters.  Character sets may
+also be used, for example '[ENZ]' will match either E, N or Z.
+The '#' character indicates the remaining portion of the line will be
+ignored.
+
+Example selection file entires (the first four fields are required)
+.nf
+#net sta  loc  chan  qual  start             end
+IU   ANMO *    BH?
+II   *    *    *     Q
+IU   COLA 00   LH[ENZ] R
+IU   COLA 00   LHZ   *     2008,100,10,00,00 2008,100,10,30,00
+.fi
+
+\fBWarning:\fP with a selection file it is possible to specify
+multiple, arbitrary selections.  Some combinations of these selects
+are not possible.  See \fBCAVEATS AND LIMITATIONS\fP for more details.
+
+.SH "INPUT LIST FILE"
+A list file can be used to specify input files, one file per line.
+The initial '@' character indicating a list file is not considered
+part of the file name.  As an example, if the following command line
+option was used:
+
+.nf
+\fB@files.list\fP
+.fi
+
+The 'files.list' file might look like this:
+
+.nf
+data/day1.mseed
+data/day2.mseed
+data/day3.mseed
+.fi
+
+.SH "INPUT FILE RANGE"
+Each input file may be specified with an associated byte range to
+read.  The program will begin reading at the specified start offset
+and finish reading when at or beyond the end offset.  The range is
+specified by appending an '@' charater to the filename with the start
+and end offsets separated by a colon:
+
+.nf
+filename.mseed@[startoffset][:][endoffset]
+.fi
+
+For example: "filename.mseed@4096:8192".  Both the start and end
+offsets are optional.  The colon separator is optional if no end
+offset is specified.
+
+.SH "MATCH OR REJECT LIST FILE"
+A list file used with either the \fB-M\fP or \fB-R\fP contains a list
+of regular expressions (one on each line) that will be combined into a
+single compound expression.  The initial '@' character indicating a
+list file is not considered part of the file name.  As an example, if
+the following command line option was used:
+
+.nf
+\fB-M @match.list\fP
+.fi
+
+The 'match.list' file might look like this:
+
+.nf
+IU_ANMO_.*
+IU_ADK_00_BHZ.*
+II_BFO_00_BHZ_Q
+.fi
+
+.SH "ARCHIVE FORMAT"
+The pre-defined archive layouts are as follows:
+
+.nf
+-CHAN dir   :: dir/%n.%s.%l.%c
+-QCHAN dir  :: dir/%n.%s.%l.%c.%q
+-CDAY dir   :: dir/%n.%s.%l.%c.%Y:%j:#H:#M:#S
+-SDAY dir   :: dir/%n.%s.%Y:%j
+-BUD dir    :: dir/%n/%s/%s.%n.%l.%c.%Y.%j
+-SDS dir    :: dir/%Y/%n/%s/%c.D/%n.%s.%l.%c.D.%Y.%j
+-CSS dir    :: dir/%Y/%j/%s.%c.%Y:%j:#H:#M:#S
+.fi
+
+An archive format is expanded for each record using the following
+substitution flags:
+
+.nf
+  \fBn\fP : network code, white space removed
+  \fBs\fP : station code, white space removed
+  \fBl\fP : location code, white space removed
+  \fBc\fP : channel code, white space removed
+  \fBY\fP : year, 4 digits
+  \fBy\fP : year, 2 digits zero padded
+  \fBj\fP : day of year, 3 digits zero padded
+  \fBH\fP : hour, 2 digits zero padded
+  \fBM\fP : minute, 2 digits zero padded
+  \fBS\fP : second, 2 digits zero padded
+  \fBF\fP : fractional seconds, 4 digits zero padded
+  \fBq\fP : single character record quality indicator (D, R, Q)
+  \fBL\fP : data record length in bytes
+  \fBr\fP : sample rate (Hz) as a rounded integer
+  \fBR\fP : sample rate (Hz) as a float with 6 digit precision
+  \fB%\fP : the percent (%) character
+  \fB#\fP : the number (#) character
+.fi
+
+The flags are prefaced with either the \fB%\fP or \fB#\fP modifier.
+The \fB%\fP modifier indicates a defining flag while the \fB#\fP
+indicates a non-defining flag.  All records with the same set of
+defining flags will be written to the same file.  Non-defining flags
+will be expanded using the values in the first record for the
+resulting file name.
+
+Time flags are based on the start time of the given record.
+
+.SH ARCHIVE FORMAT EXAMPLES
+
+The format string for the predefined \fIBUD\fP layout:
+
+\fB/archive/%n/%s/%s.%n.%l.%c.%Y.%j\fP
+
+would expand to day length files named something like:
+
+\fB/archive/NL/HGN/HGN.NL..BHE.2003.055\fP
+
+As an example of using non-defining flags the format string for the
+predefined \fICSS\fP layout:
+
+\fB/data/%Y/%j/%s.%c.%Y:%j:#H:#M:#S\fP
+
+would expand to:
+
+\fB/data/2003/055/HGN.BHE.2003:055:14:17:54\fP
+
+resulting in day length files because the hour, minute and second are
+specified with the non-defining modifier.  The hour, minute and second
+fields are from the first record in the file.
+
+.SH LEAP SECOND LIST FILE
+If the environment variable LIBMSEED_LEAPSECOND_FILE is set it is
+expected to indicate a file containing a list of leap seconds as
+published by NIST and IETF, usually available here:
+https://www.ietf.org/timezones/data/leap-seconds.list
+
+Specifying this file is highly recommended when pruning records at the
+sample level.
+
+If present, the leap seconds listed in this file will be used to
+adjust the time coverage for records that contain a leap second.
+Also, leap second indicators in the miniSEED headers will be ignored.
+
+To suppress the warning printed by the program without specifying a
+leap second file, set LIBMSEED_LEAPSECOND_FILE=NONE.
+
+.SH ERROR HANDLING AND RETURN CODES
+Any significant error message will be pre-pended with "ERROR" which
+can be parsed to determine run-time errors.  Additionally the program
+will return an exit code of 0 on successful operation and 1 when any
+errors were encountered.
+
+.SH AUTHOR
+.nf
+Chad Trabant
+IRIS Data Management Center
+.fi
