@@ -1,2 +1,5 @@
+2018.180: 1.1
+	- Add -szs (skip zero samples) option.
+
 2018.143: 1.0
 	- Started from dataselect v3.21.

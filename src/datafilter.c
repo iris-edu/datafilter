@@ -32,7 +32,7 @@
 
 #include "dsarchive.h"
 
-#define VERSION "1.0"
+#define VERSION "1.1"
 #define PACKAGE "datafilter"
 
 /* Input/output file selection information containers */
@@ -77,6 +77,7 @@ static hptime_t endtime = HPTERROR; /* Limit to records containing or before end
 
 static regex_t *match = 0; /* Compiled match regex */
 static regex_t *reject = 0; /* Compiled reject regex */
+static flag skipzerosamps = 0; /* Controls skipping of records with zero samples */
 
 static char *outputfile = 0; /* Single output file */
 static flag outputmode = 0; /* Mode for single output file: 0=overwrite, 1=append */
@@ -258,6 +259,17 @@ readfile (Filelink *flp)
 
     /* Generate the srcname with the quality code */
     msr_srcname (msr, srcname, 1);
+
+    /* Check if record should be skipped due to zero samples */
+    if (skipzerosamps && msr->samplecnt == 0)
+    {
+      if (verbose >= 3)
+      {
+        ms_hptime2seedtimestr (recstarttime, timestr, 1);
+        ms_log (1, "Skipping (zero samples) %s, %s\n", srcname, timestr);
+      }
+      continue;
+    }
 
     /* Check if record matches start time criteria: starts after or contains starttime */
     if ((starttime != HPTERROR) && (recstarttime < starttime && !(recstarttime <= starttime && recendtime >= starttime)))
@@ -903,6 +915,10 @@ processparam (int argcount, char **argvec)
     {
       rejectpattern = strdup (getoptval (argcount, argvec, optind++));
     }
+    else if (strcmp (argvec[optind], "-szs") == 0)
+    {
+      skipzerosamps = 1;
+    }
     else if (strcmp (argvec[optind], "-m") == 0)
     {
       tptr = getoptval (argcount, argvec, optind++);
@@ -1501,6 +1517,7 @@ usage (int level)
            " -M match     Limit to records matching the specified regular expression\n"
            " -R reject    Limit to records not matching the specfied regular expression\n"
            "                Regular expressions are applied to: 'NET_STA_LOC_CHAN_QUAL'\n"
+           " -szs         Skip input records that contain zero samples"
            "\n"
            " ## Output options ##\n"
            " -o file      Specify a single output file, use +o file to append\n"

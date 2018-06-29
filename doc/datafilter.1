@@ -1,4 +1,4 @@
-.TH DATAFILTER 1 2018/5/22
+.TH DATAFILTER 1 2018/06/29
 .SH NAME
 datafilter - miniSEED data filtering
 
@@ -80,6 +80,10 @@ name: 'NET_STA_LOC_CHAN_QUAL'.  If the reject expression begins with
 an '@' character it is assumed to indicate a file containing a list of
 expressions to reject, see the \fBMATCH OR REJECT LIST FILE\fP
 section below.
+
+.IP "-szs"
+Skip records that contain zero samples, generally these are detection
+records, etc.
 
 .IP "-m \fImatch\fP"
 This is effectively the same as \fB-M\fP except that \fImatch\fP is
